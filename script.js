@@ -449,7 +449,309 @@ document.addEventListener('DOMContentLoaded', function() {
             expenseGroup.style.display = 'block';
         }
     });
+// Monthly Report Functions
+const generateReportBtn = document.getElementById('generateReport');
+const reportMonthInput = document.getElementById('reportMonth');
+const reportResults = document.getElementById('reportResults');
+const downloadReportBtn = document.getElementById('downloadReport');
 
+// Set default report month to current month
+reportMonthInput.value = new Date().toISOString().slice(0, 7);
+
+// Generate monthly report
+generateReportBtn.addEventListener('click', function() {
+    const selectedMonth = reportMonthInput.value;
+    
+    if (!selectedMonth) {
+        showNotification('Please select a month first.', 'error');
+        return;
+    }
+    
+    generateMonthlyReport(selectedMonth);
+});
+
+// Generate the report
+function generateMonthlyReport(month) {
+    // Filter transactions for the selected month
+    const monthlyTransactions = transactions.filter(t => 
+        t.date.startsWith(month)
+    );
+    
+    if (monthlyTransactions.length === 0) {
+        reportResults.innerHTML = `
+            <div class="report-empty">
+                <i class="fas fa-chart-pie"></i>
+                <p>No transactions found for ${formatMonthName(month)}</p>
+            </div>
+        `;
+        reportResults.style.display = 'block';
+        return;
+    }
+    
+    // Calculate totals
+    let totalIncome = 0;
+    let totalExpense = 0;
+    let incomeByCategory = {};
+    let expenseByCategory = {};
+    
+    monthlyTransactions.forEach(transaction => {
+        const amount = parseFloat(transaction.amount);
+        
+        if (transaction.type === 'income') {
+            totalIncome += amount;
+            incomeByCategory[transaction.category] = (incomeByCategory[transaction.category] || 0) + amount;
+        } else {
+            totalExpense += amount;
+            expenseByCategory[transaction.category] = (expenseByCategory[transaction.category] || 0) + amount;
+        }
+    });
+    
+    const balance = totalIncome - totalExpense;
+    const savingsRate = totalIncome > 0 ? ((balance / totalIncome) * 100) : 0;
+    const avgDailyExpense = totalExpense / new Date(month + '-01').daysInMonth();
+    
+    // Get currency symbol
+    const symbol = getCurrencySymbol(currentCurrency);
+    
+    // Prepare category breakdowns
+    const incomeCategories = Object.entries(incomeByCategory)
+        .map(([category, amount]) => ({ category, amount }))
+        .sort((a, b) => b.amount - a.amount);
+    
+    const expenseCategories = Object.entries(expenseByCategory)
+        .map(([category, amount]) => ({ category, amount }))
+        .sort((a, b) => b.amount - a.amount);
+    
+    // Generate HTML for report
+    let reportHTML = `
+        <div class="report-summary">
+            <div class="report-summary-card">
+                <h4>Total Income</h4>
+                <div class="report-summary-value positive">${symbol}${totalIncome.toFixed(2)}</div>
+            </div>
+            <div class="report-summary-card">
+                <h4>Total Expenses</h4>
+                <div class="report-summary-value negative">${symbol}${totalExpense.toFixed(2)}</div>
+            </div>
+            <div class="report-summary-card">
+                <h4>Monthly Balance</h4>
+                <div class="report-summary-value ${balance >= 0 ? 'positive' : 'negative'}">
+                    ${symbol}${balance.toFixed(2)}
+                </div>
+            </div>
+            <div class="report-summary-card">
+                <h4>Savings Rate</h4>
+                <div class="report-summary-value ${savingsRate >= 0 ? 'positive' : 'negative'}">
+                    ${savingsRate.toFixed(1)}%
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Add category breakdowns
+    if (expenseCategories.length > 0) {
+        reportHTML += `
+            <div class="category-breakdown">
+                <h3><i class="fas fa-tags"></i> Expense Breakdown</h3>
+                ${generateCategoryHTML(expenseCategories, totalExpense, symbol)}
+            </div>
+        `;
+    }
+    
+    if (incomeCategories.length > 0) {
+        reportHTML += `
+            <div class="category-breakdown">
+                <h3><i class="fas fa-money-bill-wave"></i> Income Breakdown</h3>
+                ${generateCategoryHTML(incomeCategories, totalIncome, symbol)}
+            </div>
+        `;
+    }
+    
+    // Add charts
+    reportHTML += `
+        <div class="report-charts">
+            <div class="chart-container">
+                <h3>Income vs Expenses</h3>
+                <div class="chart">
+                    <div class="chart-bar income" style="height: ${Math.min(totalIncome / (totalIncome + totalExpense) * 100, 100)}%">
+                        <div class="chart-label">Income</div>
+                    </div>
+                    <div class="chart-bar expense" style="height: ${Math.min(totalExpense / (totalIncome + totalExpense) * 100, 100)}%">
+                        <div class="chart-label">Expenses</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="chart-container">
+                <h3>Top Expense Categories</h3>
+                <div class="chart">
+                    ${generateChartBars(expenseCategories.slice(0, 5), totalExpense)}
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Add detailed transaction table
+    reportHTML += `
+        <div class="detailed-report">
+            <h3><i class="fas fa-list-alt"></i> Detailed Transactions</h3>
+            <table class="report-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Category</th>
+                        <th>Description</th>
+                        <th>Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${monthlyTransactions.map(transaction => `
+                        <tr>
+                            <td>${formatDate(transaction.date)}</td>
+                            <td>
+                                <span class="transaction-type ${transaction.type}">
+                                    ${transaction.type.charAt(0).toUpperCase() + transaction.type.slice(1)}
+                                </span>
+                            </td>
+                            <td>${formatCategory(transaction.category)}</td>
+                            <td>${transaction.description || '-'}</td>
+                            <td class="${transaction.type === 'income' ? 'positive' : 'negative'}">
+                                ${transaction.type === 'income' ? '+' : '-'}${symbol}${parseFloat(transaction.amount).toFixed(2)}
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    reportResults.innerHTML = reportHTML;
+    reportResults.style.display = 'block';
+    
+    // Scroll to report
+    reportResults.scrollIntoView({ behavior: 'smooth' });
+}
+
+// Generate category HTML
+function generateCategoryHTML(categories, total, symbol) {
+    return categories.map(item => {
+        const percentage = ((item.amount / total) * 100).toFixed(1);
+        return `
+            <div class="category-item">
+                <div class="category-name">
+                    <div class="category-icon">
+                        <i class="fas fa-${getCategoryIcon(item.category)}"></i>
+                    </div>
+                    ${formatCategory(item.category)}
+                </div>
+                <div class="category-bar">
+                    <div class="category-bar-fill" style="width: ${percentage}%; background: ${getCategoryColor(item.category)}"></div>
+                </div>
+                <div style="text-align: right;">
+                    <div style="font-weight: 600;">${symbol}${item.amount.toFixed(2)}</div>
+                    <div style="font-size: 0.8rem; color: #666;">${percentage}%</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Generate chart bars
+function generateChartBars(categories, total) {
+    return categories.map(item => {
+        const height = Math.min((item.amount / total) * 100, 100);
+        return `
+            <div class="chart-bar" style="height: ${height}%; background: ${getCategoryColor(item.category)}">
+                <div class="chart-label">${formatCategory(item.category).split(' ')[0]}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Get category color
+function getCategoryColor(category) {
+    const colors = {
+        'salary': '#4CAF50',
+        'freelance': '#8BC34A',
+        'investment': '#CDDC39',
+        'gift': '#FFEB3B',
+        'food': '#FF9800',
+        'transport': '#2196F3',
+        'housing': '#3F51B5',
+        'utilities': '#009688',
+        'entertainment': '#E91E63',
+        'shopping': '#9C27B0',
+        'health': '#FF5722',
+        'education': '#795548',
+        'other-income': '#607D8B',
+        'other-expense': '#9E9E9E'
+    };
+    return colors[category] || '#666';
+}
+
+// Format month name
+function formatMonthName(monthString) {
+    const [year, month] = monthString.split('-');
+    const date = new Date(year, month - 1);
+    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+
+// Add daysInMonth to Date prototype
+Date.prototype.daysInMonth = function() {
+    return new Date(this.getFullYear(), this.getMonth() + 1, 0).getDate();
+};
+
+// Download PDF report
+downloadReportBtn.addEventListener('click', function() {
+    const selectedMonth = reportMonthInput.value;
+    
+    if (!selectedMonth) {
+        showNotification('Please select a month first.', 'error');
+        return;
+    }
+    
+    if (!reportResults.style.display || reportResults.style.display === 'none') {
+        showNotification('Please generate a report first.', 'error');
+        return;
+    }
+    
+    // Simple PDF generation using browser print
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+        <html>
+            <head>
+                <title>Monthly Report - ${formatMonthName(selectedMonth)}</title>
+                <style>
+                    body { font-family: Arial, sans-serif; padding: 20px; }
+                    h1 { color: #2c3e50; }
+                    .summary { display: flex; gap: 20px; margin: 20px 0; }
+                    .summary-item { flex: 1; text-align: center; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                    th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+                    th { background: #f5f5f5; }
+                    @media print {
+                        .no-print { display: none; }
+                    }
+                </style>
+            </head>
+            <body>
+                <h1>Monthly Budget Report</h1>
+                <h2>${formatMonthName(selectedMonth)}</h2>
+                <p>Generated on ${new Date().toLocaleDateString()}</p>
+                <div class="no-print">
+                    <button onclick="window.print()">Print Report</button>
+                </div>
+                ${reportResults.innerHTML}
+            </body>
+        </html>
+    `);
+    printWindow.document.close();
+    
+    showNotification('Report opened in new window. Click Print or use Ctrl+P to save as PDF.', 'success');
+});
     // Initialize
     initApp();
+    // Initialize report month to current month
+reportMonthInput.value = new Date().toISOString().slice(0, 7);
 });

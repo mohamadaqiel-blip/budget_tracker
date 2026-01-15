@@ -65,7 +65,30 @@
                     </div>
                 </div>
             </div>
-
+<!-- Add after the Add Transaction Form, before Transactions Container -->
+<div class="report-container">
+    <h2><i class="fas fa-chart-bar"></i> Monthly Report</h2>
+    
+    <div class="report-controls">
+        <div class="form-group">
+            <label for="reportMonth"><i class="fas fa-calendar"></i> Select Month</label>
+            <input type="month" id="reportMonth" value="">
+        </div>
+        <button id="generateReport" class="btn-primary">
+            <i class="fas fa-file-alt"></i> Generate Report
+        </button>
+        <button id="downloadReport" class="btn-secondary">
+            <i class="fas fa-download"></i> Download as PDF
+        </button>
+    </div>
+    
+    <div class="report-results" id="reportResults">
+        <div class="report-empty">
+            <i class="fas fa-chart-pie"></i>
+            <p>Select a month and click "Generate Report" to see your monthly analysis</p>
+        </div>
+    </div>
+</div>
             <!-- Add Transaction Form -->
             <div class="form-container">
                 <h2><i class="fas fa-plus-circle"></i> Add New Transaction</h2>
