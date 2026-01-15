@@ -80,4 +80,3 @@ A modern, user-friendly web application for tracking personal finances with deta
 - **Git & GitHub**: Version control and collaboration
 - **Chrome DevTools**: Debugging and testing
 
-## 📁 Project Structure
